@@ -194,31 +194,7 @@ SELECT nome, DiasAtrasoPagamento(2, IdMorador) AS DiasAtraso
 FROM Morador
 JOIN Pessoa ON Pessoa.IdPessoa = Morador.Pessoa_IdPessoa;
 
--- ===============================
--- VIEW: Identifica e mostra quais taxas condominiais apresentam os maiores atrasos médios nos pagamentos realizados pelos moradores.
--- ===============================
 
-CREATE OR REPLACE VIEW View_AnaliseInadimplencia AS
-SELECT
-    t.IdTaxa,
-    t.titulo AS TituloTaxa,
-    t.vencimento AS DataVencimento,
-    COUNT(DISTINCT tr.Morador_IdMorador) AS QtdePagantes,
-    COUNT(*) AS QtdePagamentos,
-    ROUND(AVG(DiasAtrasoPagamento(t.IdTaxa, tr.Morador_IdMorador)), 2) AS MediaDiasAtraso,
-    MAX(DiasAtrasoPagamento(t.IdTaxa, tr.Morador_IdMorador)) AS MaiorAtraso
-FROM 
-    Transacao tr
-JOIN 
-    Taxa t ON t.IdTaxa = tr.Taxa_IdTaxa
-GROUP BY 
-    t.IdTaxa, t.titulo, t.vencimento
-ORDER BY 
-    MediaDiasAtraso DESC;
-
-
--- Teste da View:
-SELECT * FROM View_AnaliseInadimplencia;
 
 -- ===============================
 -- VIEW: Mostra cada síndico com seu período de mandato, total de comunicados enviados e a média mensal de comunicados, 
@@ -357,8 +333,13 @@ BEGIN
 END;
 //
 
+-- Teste da Function:
+SELECT verificaReservaAtiva(1, '2025-06-20', '18:00:00', '20:00:00') AS qtdReservasAtivas;
+SELECT verificaReservaAtiva(6, '2025-06-20', '18:00:00', '20:00:00') AS qtdReservasAtivas;
+
+
 -- ===============================
--- TRIGGER: Verifica se o morador já possui alguma reserva no mesmo dia e com horário que se sobrepõe ao novo pedido.
+-- TRIGGER: Impede que um morador faça uma nova reserva no mesmo dia e horário em que ele já tem uma reserva ativa.
 -- ===============================
 
 CREATE TRIGGER trg_BloqueiaReservaDuplicada
@@ -508,16 +489,30 @@ DELIMITER ;
 
 -- Teste Trigger:
 
+
+-- Update para garantir a sincronização da porcentagem das opções de uma enquete
+UPDATE Opcao o
+SET porcentResposta = CalcularPorcentagemOpcao(o.IdOpcao)
+WHERE o.Enquete_IdEnquete = 1;
+
+ -- Update para garantir a sincronização da tabela.
+ UPDATE Enquete e
+SET totalParticipantes = (
+  SELECT COUNT(DISTINCT v.Morador_IdMorador)
+  FROM Voto v
+  JOIN Opcao o ON v.Opcao_IdOpcao = o.IdOpcao
+  WHERE o.Enquete_IdEnquete = e.IdEnquete
+)
+WHERE e.IdEnquete = 1;
+
+-- Antes da inserção
 SELECT * FROM Enquete WHERE IdEnquete = 1;
 SELECT * FROM Opcao WHERE Enquete_IdEnquete = 1;
+
+-- Inserção de registro
 INSERT INTO Voto (Morador_IdMorador, Opcao_IdOpcao)
 VALUES (10, 3);  -- 3 é IdOpcao pertencente à Enquete 1
+
+-- Depois da inserção.
 SELECT * FROM Enquete WHERE IdEnquete = 1;  
 SELECT * FROM Opcao WHERE Enquete_IdEnquete = 1;  
-INSERT INTO Voto (Morador_IdMorador, Opcao_IdOpcao)
-VALUES (2, 3); 
-SELECT * FROM Enquete WHERE IdEnquete = 1;  
-SELECT * FROM Opcao WHERE Enquete_IdEnquete = 1;   
-
-
-
